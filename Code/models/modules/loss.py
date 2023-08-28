@@ -20,8 +20,6 @@ def Gaussian_NLL(X, mean, logvar, mask=None):
     nll = 0.5 * (errors**2 + logvar +
                  constant) if mask is None else 0.5 * mask * (
                      errors**2 + logvar + constant)
-    #nll = 0.5 * (errors**2 + logvar +
-    #             constant)
     return nll
 
 
@@ -38,17 +36,8 @@ class MaskedMSEloss(nn.Module):
             mse = self.criterion(
                 X_pred, X) * mask if mask is not None else self.criterion(
                     X_pred, X)
-            #mse = self.criterion(
-            #    X_pred, X)
-        #mae = (torch.abs(X_pred - X) * mask)
-        #mape = torch.abs(X_pred - X) / (torch.abs(X) + 1e-6)
-        #mape = (mape * mask).sum((1, 2, 3)) / (mask.sum((1, 2, 3)) + 1e-6)
-        #
-        #print(X.min(), X.max())
         if mean:
             mse = mse.sum((-3, -2, -1)).mean()
-            #mae = mae.sum((-3, -2, -1)).mean()
         else:
             mse = mse.sum((-3, -2, -1))
-            #mae = mae.sum((-3, -2, -1))
-        return mse# + mae) * 0.5
+        return mse

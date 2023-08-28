@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from models.modules.convolution import GraphConvLayer, DiffConvLayer, DynDiffConvLayer
+from models.modules.convolution import DynDiffConvLayer
 
 
 class SiLU(nn.Module): 
@@ -9,23 +9,6 @@ class SiLU(nn.Module):
         return x * torch.sigmoid(x)
 
 
-#################################################################################################
-#                   Identity MODULES
-#################################################################################################
-class IdentityNet(nn.Module):
-    def __init__(self):
-        super(IdentityNet, self).__init__()
-        self.network = nn.Sequential()
-        self.network.add_module('output', nn.Identity())
-        return
-
-    def forward(self, input):
-        return self.network(input)
-
-
-#################################################################################################
-#                   Dense MODULES
-#################################################################################################
 class DensNet(nn.Module):
     def __init__(self,
                  dimIn,
@@ -39,7 +22,6 @@ class DensNet(nn.Module):
             self.network.add_module(
                 'layer-{}'.format(l),
                 nn.Linear(dimIn if not l else dimHidden, dimHidden))
-            #self.network.add_module('batch-norm-{}'.format(l), nn.BatchNorm1d(dimHidden))       # [20220122] added
             self.network.add_module('layer-activation-{}'.format(l),
                                     activation())
         self.network.add_module('output', nn.Linear(dimHidden, dimOut))
@@ -49,62 +31,7 @@ class DensNet(nn.Module):
         return self.network(input)
 
 
-#################################################################################################
-#                   Graph MODULES
-#################################################################################################
-class GCNet(nn.Module):
-    "An encocer with graph convolutional operation"
-
-    def __init__(self,
-                 dimIn,
-                 dimHidden,
-                 numHidden,
-                 dimOut,
-                 activation=nn.ReLU):
-        super(GCNet, self).__init__()
-        self.network = nn.ModuleList()
-        for l in range(numHidden):
-            self.network.append(
-                GraphConvLayer(dimIn if not l else dimHidden, dimHidden,
-                               activation))
-        self.network.append(nn.Linear(dimHidden, dimOut))
-        self.h0 = nn.Parameter(0.01 * torch.randn(size=(1, dimOut)))
-        return
-
-    def forward(self, x, A):
-        dh = x
-        for block in self.network[0:-1]:
-            dh = block(dh, A)
-        dh = self.network[-1](dh)
-        return dh
-
-    def initiation(self, ):
-        return self.h0
-
-
-class DCNet(GCNet):
-    "An encocer with diffusion convolutional operation"
-
-    def __init__(self,
-                 dimIn,
-                 dimHidden,
-                 numHidden,
-                 dimOut,
-                 K=3,
-                 activation=nn.ReLU):
-        super(DCNet, self).__init__(dimIn, dimHidden, numHidden, dimOut)
-        self.network = nn.ModuleList()
-        for l in range(numHidden):
-            self.network.append(
-                DiffConvLayer(dimIn if not l else dimHidden,
-                              dimHidden,
-                              K,
-                              activation=activation))
-        self.network.append(nn.Linear(dimHidden, dimOut))
-        return
-
-
-class DDCNet(GCNet):
+class DDCNet(nn.Module):
     "An encocer with dynamic diffusion convolutional operation"
 
     def __init__(self,
@@ -125,4 +52,15 @@ class DDCNet(GCNet):
                               activation=activation, 
                               numNode=numNode))
         self.network.append(nn.Linear(dimHidden, dimOut))
+        self.h0 = nn.Parameter(0.01 * torch.randn(size=(1, dimOut)))
         return
+
+    def forward(self, x, A):
+        dh = x
+        for block in self.network[0:-1]:
+            dh = block(dh, A)
+        dh = self.network[-1](dh)
+        return dh
+
+    def initiation(self, ):
+        return self.h0

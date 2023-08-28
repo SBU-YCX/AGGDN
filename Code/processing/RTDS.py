@@ -1,5 +1,5 @@
 """
-Author: Yingru Liu
+Author: Yingru Liu, Yucheng Xing
 Data pre-processing of RTDS data.
 """
 import h5py, glob, os
@@ -21,7 +21,6 @@ def fetch_mat(file_path):
     ts, x_cDERs, x_iDERs, x_iLOADs, x_iLINEs, us = trajSet['t'][0, 0][0], trajSet['x_cDER'][0, 0][0], \
                                                    trajSet['x_iDER'][0, 0][0], trajSet['x_iLOAD'][0, 0][0], \
                                                    trajSet['x_iLINE'][0, 0][0], trajSet['u'][0, 0][0]
-    #print(x_cDERs.shape, trajSet['t'][0, 0][1].shape)
     return ts, x_cDERs, x_iDERs, x_iLOADs, x_iLINEs, us, topology
 
 
@@ -80,7 +79,6 @@ def transform_rtds(segment_len=100, main_path = "datasets/RTDS", hdf5_path = "da
                     end = start + segment_len
                     node_currents = np.zeros((segment_len, 33, 2))
                     edge_currents = np.zeros((segment_len, topology.shape[0], 2))
-                    #print(iDER.shape, iDER[start:end, :].shape)
                     node_currents[0:end - start, source_nodes, :] = iDER[start:end, :].reshape((-1, 5, 2))
                     node_currents[0:end - start, load_nodes, :] = iLOAD[start:end, :].reshape((-1, 28, 2))
                     edge_currents[0:end - start, :, :] = iLINE[start:end, :].reshape((-1, topology.shape[0], 2))
@@ -146,9 +144,6 @@ def transform_rtds(segment_len=100, main_path = "datasets/RTDS", hdf5_path = "da
 def transform_rtds_points(num_masks_per_seg=25, train_ratio=0.8, valid_ratio=0.9, spatial_p=1.0, temporal_p=1.0, downsampling=1,
                           hdf5_path="datasets/RTDS/rtds_noisy_len100_missing_points_spatial10_temporal10_downsampling1.hdf5",
                           data_path="datasets/RTDS/rtds_noisy_len100.hdf5"):
-#def transform_rtds_points(num_masks_per_seg=50, train_ratio=0.8, valid_ratio=0.9, p = 0.7, downsampling=1, 
-#                          hdf5_path="datasets/RTDS/rtds_noisy_len100_missing7_downsampling1.hdf5",
-#                          data_path="datasets/RTDS/rtds_noisy_len100.hdf5"):
     with h5py.File(hdf5_path, 'w') as Dataset:
         raw_data = h5py.File(data_path, 'r')
         num_segs = raw_data['num_seg'][()]
@@ -194,17 +189,8 @@ def transform_rtds_points(num_masks_per_seg=25, train_ratio=0.8, valid_ratio=0.9
                     s_obs_idx = np.random.choice(np.arange(0, node_value_shape[1]), size=int(node_value_shape[1] * spatial_p), replace = False)
                     node_spatial_mask[t, s_obs_idx, :] = 1.0
                 mask = node_spatial_mask * temporal_mask
-
-                '''
-                mask = np.zeros(shape = node_value_shape)
-                for t in range(1, seq_len): 
-                    obs_idx = np.random.choice(np.arange(0, node_value_shape[1]), size = int(node_value_shape[1] * p), replace = False)
-                    mask[t, obs_idx, :] = 1.0
-                '''
                 mask[0, :, :] = 1.0
                 mask = mask.astype(dtype=np.bool)
-                
-                #print(node_value_shape, node_spatial_mask.shape, temporal_mask.shape, mask.shape)
                 # generate edge masks.
                 true_edge_value_shape = list(raw_data['edge_currents_{}'.format(data_idx)][()].shape)
                 true_edge_value_shape[0] = (true_edge_value_shape[0] - 1) // downsampling + 1
@@ -214,14 +200,7 @@ def transform_rtds_points(num_masks_per_seg=25, train_ratio=0.8, valid_ratio=0.9
                 for t in range(0, seq_len): 
                     se_obs_idx = np.random.choice(np.arange(0, edge_value_shape[1]), size=int(edge_value_shape[1] * spatial_p), replace = False)
                     edge_spatial_mask[t, se_obs_idx, :] = 1.0
-                #edge_spatial_mask[:, 0:true_edge_value_shape[1], :] = np.random.binomial(1, spatial_p, size=true_edge_value_shape)
                 edge_mask = edge_spatial_mask * temporal_mask
-                '''
-                edge_mask = np.zeros(shape = edge_value_shape)
-                for t in range(1, seq_len): 
-                    obs_idx = np.random.choice(np.arange(0, edge_value_shape[1]), size = int(edge_value_shape[1] * p), replace = False)
-                    edge_mask[t, obs_idx, :] = 1.0
-                '''
                 edge_mask[0, :, :] = 1.0
                 edge_mask = edge_mask.astype(dtype=np.bool)
                 # split.
@@ -296,13 +275,13 @@ class RTDS_data(Dataset):
     def __getitem__(self, idx):
         train_data_index = self.data_idx[idx]
         max_num_edge = self.raw_data['max_num_edges'][()]
-        X = (self.raw_data['node_currents_{}'.format(train_data_index)][()] - self.mean_v) / self.std_v
-        #X = self.raw_data['node_currents_{}'.format(train_data_index)][()]
+        X_ori = (self.raw_data['node_currents_{}'.format(train_data_index)][()] - self.mean_v) / self.std_v
         if self.noise_ratio != 0: 
-            #noise_scale = self.noise_ratio * (X.max() - X.min()) / 2
-            X_noise = np.random.normal(0, self.noise_ratio, size = X.shape)
-            #X_noise = stats.truncnorm(X.min() * self.noise_ratio, X.max() * self.noise_ratio, loc=0, scale=1, size=X.shape)
-            X = X + X_noise
+            rms_X = np.sqrt((X * X).sum((0)) / X.shape[0])
+            X_noise = np.random.randn(X.shape[0], X.shape[1], X.shape[2]) * self.noise_ratio * rms_X
+            X = X_ori + X_noise
+        else:
+            X = X_ori
         E_t = self.raw_data['edge_currents_{}'.format(train_data_index)][()]
         E = np.zeros(shape=(X.shape[0], max_num_edge, X.shape[-1]))
         E[:, 0:E_t.shape[1], :] = E_t
@@ -315,17 +294,6 @@ class RTDS_data(Dataset):
         if self.upsampling != 1: 
             up_sampling_idx = np.arange(0, X.shape[0] * self.upsampling, self.upsampling).astype(np.int32)
             t = t[up_sampling_idx].astype(np.float32)
-            #newX = [], newE = [], idx = 0
-            #for n, dt in enumerate(t): 
-            #    if n == up_sampling_idx[idx]: 
-            #        newX.append(X[idx])
-            #        newE.append(E[idx])
-            #        idx += 1
-            #    else:
-            #        newX.append(torch.zeros_like(X[0]))
-            #        newE.append(torch.zeros_like(E[0]))
-            #X = torch.stack(newX, 0).astype(np.float32)
-            #E = torch.stack(newE, 0).astype(np.float32)
         # down sampling.
         down_sampling_idx = np.arange(0, X.shape[0], self.downsampling)
         X, E, t = X[down_sampling_idx].astype(np.float32), E[down_sampling_idx].astype(np.float32), \
@@ -337,28 +305,12 @@ class RTDS_data(Dataset):
         v = torch.FloatTensor(torch.ones(i.size(0)))
         adjacent_nodes = torch.sparse.FloatTensor(i.t(), v, torch.Size([33, 33])).to_dense()
         adjacent_nodes += adjacent_nodes.t()
-        # Normalized Laplacian Matrix
-        '''
-        adjacent_nodes += torch.eye(adjacent_nodes.size(0))
-        degree_nodes = torch.FloatTensor(adjacent_nodes.sum(1))
-        degree_nodes = torch.diag(torch.pow(degree_nodes, -0.5))
-        adjacent_nodes = degree_nodes.mm(adjacent_nodes).mm(degree_nodes)
-        '''
         #
         nodes = self.raw_data['topologies_edge_{}'.format(self.raw_data['topologies_{}'.format(train_data_index)][()])][()]
-        #print(nodes.shape)
-        #print(nodes.max())
         i = torch.LongTensor(nodes)
         v = torch.FloatTensor(torch.ones(i.size(0)))
         adjacent_edges = torch.sparse.FloatTensor(i.t(), v, torch.Size([max_num_edge, max_num_edge])).to_dense()
         adjacent_edges += adjacent_edges.t()
-        # Normalized Laplacian Matrix
-        '''
-        adjacent_edges += torch.eye(adjacent_edges.size(0))
-        degree_edges = torch.FloatTensor(adjacent_edges.sum(1))
-        degree_edges = torch.diag(torch.pow(degree_edges, -0.5))
-        adjacent_edges = degree_edges.mm(adjacent_edges).mm(degree_edges)
-        '''
         # transformation matrix.
         edge_node_pairs = np.asarray([[[i, v[0]], [i, v[1]]] for i, v in enumerate(edges)], dtype=np.uint8).reshape((-1, 2))
         i = torch.LongTensor(edge_node_pairs)
@@ -376,19 +328,11 @@ class RTDS_data(Dataset):
                         '#nodes': num_edges, 'Ys': der, 'ori_values': E}
             else:
                 return {'t': t, 'adjacent_matrices': adjacent_nodes, 'values': X, 'masks': M_x,
-                        '#nodes': num_nodes, 'Ys': der, 'ori_values': X}
+                        '#nodes': num_nodes, 'Ys': der, 'ori_values': X_ori}
         else:
             if self.return_edge:
                 return {'t': t, 'adjacent_matrices': adjacent_edges, 'values': E, 'masks': M_e,
                         '#nodes': num_edges, 'mean': self.mean_v, 'std': self.std_v, 'ori_values': E}
             else:
                 return {'t': t, 'adjacent_matrices': adjacent_nodes, 'values': X, 'masks': M_x,
-                        '#nodes': num_nodes, 'mean': self.mean_v, 'std': self.std_v, 'ori_values': X}
-
-
-#transform_rtds()
-#transform_rtds_points()
-# data = RTDS_data('train', "datasets/RTDS/rtds_data_missing_points_spatial6_temporal3_downsampling2.hdf5", return_der=True)
-#
-# for data_batch in data:
-#     print()
+                        '#nodes': num_nodes, 'mean': self.mean_v, 'std': self.std_v, 'ori_values': X_ori}
