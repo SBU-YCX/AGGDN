@@ -5,7 +5,7 @@ Adversarial Graph-Gated Differential Network
 This is an implementation of the paper [
 AGGDN: A Continuous Stochastic Predictive Model for Monitoring Sporadic Time Series on Graphs](https://link.springer.com/chapter/10.1007/978-981-99-8079-6_11) accepted by ICONIP 2023.
 
-<embed src="iconip_140_poster.pdf" type="application/pdf" width="100%" height="600px" />
+
 
 ## Citation:
 If you use this code, please cite:
