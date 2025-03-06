@@ -12,7 +12,7 @@ import numpy as np
 from tqdm.auto import tqdm
 from processing import RTDS_data
 from torch.utils.data import DataLoader
-from models import NGDCSDE
+from models import NGDCSDE, Discriminator
 
 # RTDS: 32
 
