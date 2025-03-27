@@ -7,6 +7,7 @@ import numpy as np
 import torch.nn as nn
 from models.modules import MaskedMSEloss
 from models.modules import DensNet, DDCGRUCell, DDCGRUODECell
+from models.modules import DDCNet as DDCODECell
 
 
 class HGDCODE(nn.Module):
