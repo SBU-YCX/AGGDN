@@ -42,7 +42,7 @@ class DDCNet(nn.Module):
                  K=3,
                  activation=nn.ReLU,
                  numNode=33):
-        super(DDCNet, self).__init__(dimIn, dimHidden, numHidden, dimOut)
+        super(DDCNet, self).__init__()
         self.network = nn.ModuleList()
         for l in range(numHidden):
             self.network.append(
